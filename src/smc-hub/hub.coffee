@@ -188,8 +188,9 @@ init_express_http_server = () ->
     router.use(bodyParser.urlencoded({ extended: true }))
 
     # The /static content
-    router.use('/static', express.static(STATIC_PATH, {hidden:true}))
+    router.use('/static',   express.static(STATIC_PATH, {hidden:true}))
     router.use('/policies', express.static(path_module.join(STATIC_PATH, 'policies'), {hidden:true}))
+    router.use('/about',    express.static(path_module.join(STATIC_PATH, 'about', {maxAge: '1h'})))
 
     router.get '/', (req, res) ->
         res.sendFile(path_module.join(SALVUS_HOME, 'static', 'index.html'))

@@ -20,16 +20,12 @@ node_modules
 *.sass-cache
 
 src/static/webpack
-
+src/static/about
 src/static/policies/pricing.html
-
 src/page/temp
-
 src/static/mercury/js/mercury.min.js
 src/static/mercury/src/build
-
 src/static/codemirror-3.1/*
-
 src/static/*.min.js
 src/static/*.map.js
 
