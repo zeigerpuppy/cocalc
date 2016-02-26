@@ -1,0 +1,1 @@
+The purpose of this module is to orchestrate the creation of static HTML pages. This includes a getting-started guide, documentation augmenting the one of SageMath, R, Python and other offered tools, and pages explaining SMC in general.

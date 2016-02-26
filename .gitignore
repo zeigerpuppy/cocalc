@@ -20,7 +20,7 @@ node_modules
 *.sass-cache
 
 src/static/webpack
-src/static/about
+src/static/pages
 src/static/policies/pricing.html
 src/page/temp
 src/static/mercury/js/mercury.min.js
