@@ -952,9 +952,16 @@ class exports.Editor
 
         # These are used *ONLY* for development purposes; it allows us to easily
         # circumvent everything else for testing.
-        if ext == 'dev-codemirror'
-            console.log("dev-codemirror")
-            return new ReactCodemirror(@, filename, content, extra_opts)
+        switch ext
+            when 'dev-codemirror'
+                console.log("dev-codemirror")
+                return new ReactCodemirror(@, filename, content, extra_opts)
+            when 'dev-tasks'
+                console.log("dev-tasks")
+                return new ReactTasks(@, filename, content, extra_opts)
+            when 'dev-terminal'
+                console.log("dev-terminal")
+                return new ReactTerminal(@, filename, content, extra_opts)
 
         # Some of the editors below might get the content later and will
         # call @file_options again then.
@@ -4501,6 +4508,34 @@ class ReactCodemirror extends FileEditorWrapper
                 editor_codemirror.show(args...)
         editor_codemirror.render(args...)
 
+class ReactTasks extends FileEditorWrapper
+    init_wrapped: () =>
+        editor_tasks = require('./editor_tasks')
+        @element = $("<div>")
+        @element.css
+            'overflow-y'       : 'auto'
+            padding            : '7px'
+            border             : '1px solid #aaa'
+            width              : '100%'
+            'background-color' : 'white'
+            bottom             : 0
+        args = [@editor.project_id, @filename,  @element[0], require('./smc-react').redux]
+        @wrapped =
+            save    : undefined
+            destroy : =>
+                if not args?
+                    return
+                editor_tasks.free(args...)
+                args = undefined
+                delete @editor
+                @element?.empty()
+                @element?.remove()
+                delete @element
+            hide    : =>
+                editor_tasks.hide(args...)
+            show    : =>
+                editor_tasks.show(args...)
+        editor_tasks.render(args...)
 
 ###
 # *TEMPLATE* for a react-based editor

@@ -2,7 +2,7 @@
 immutable = require('immutable')
 {ReactReorderable} = require('react-reorderable')
 
-{React, ReactDOM, Actions, Store, Flux, rclass, rtypes} = require('./r')
+{React, ReactDOM, Actions, Store, Redux, rclass, rtypes} = require('./r')
 {synchronized_db} = require('./syncdb')
 {alert_message} = require('./alerts')
 {Icon, TimeAgo} = require('./r_misc')
@@ -14,7 +14,7 @@ class TasksActions extends Actions
         payload
 
     _syncdb_change: (changes) =>
-        m = tasks = @flux.getStore(@name).state.tasks
+        m = tasks = @redux.getStore(@name).state.tasks
         for x in changes
             if x.insert
                 tasks = tasks.set(x.insert.task_id, immutable.fromJS(x.insert))
@@ -53,21 +53,12 @@ class TasksActions extends Actions
                 task_id : task_id
         @syncdb.save()
 
-class TasksStore extends Store
-    _init: (flux) =>
-        ActionIds = flux.getActionIds(@name)
-        @register(ActionIds.setTo, @setState)
-        @state =
-            tasks : immutable.fromJS({})
-            search : ''
-
-exports.init_flux = init_flux = (flux, project_id, filename) ->
-    name = flux_name(project_id, filename)
-    if flux.getActions(name)?
+exports.init_redux = init_redux = (redux, project_id, filename) ->
+    name = redux_name(project_id, filename)
+    if redux.getActions(name)?
         return  # already initialized
-    actions = flux.createActions(name, TasksActions)
-    store   = flux.createStore(name, TasksStore)
-    store._init(flux)
+    actions = redux.createActions(name, TasksActions)
+    store   = redux.createStore(name, TasksStore)    # Needs init state
     synchronized_db
         project_id : project_id
         filename   : filename
@@ -83,7 +74,7 @@ exports.init_flux = init_flux = (flux, project_id, filename) ->
                 syncdb.on('change', actions._syncdb_change)
                 store.syncdb = actions.syncdb = syncdb
 
-flux_name = (project_id, path) ->
+redux_name = (project_id, path) ->
     return 'editor-#{project_id}-#{path}'
 
 task_item_styles =
@@ -272,44 +263,67 @@ TasksButtons = ({tasks, selected_task, actions}) ->
         </Col>
     </Row>
 
-Tasks = ({tasks, selected_task, search, include_done, include_deleted, actions}) ->
-    filter_tasks = (tasks) ->
-        split = misc.search_split(search)
-        tasks.filter (task) ->
-            misc.search_match(task.get('desc'), split) and
-            (include_deleted or not task.get('deleted')) and
-            (include_done or not task.get('done'))
-    filtered_tasks = filter_tasks(tasks)
-    <div>
-        <TasksTop tasks={filtered_tasks} search={search} actions={actions} include_done={include_done} include_deleted={include_deleted} />
-        <TasksButtons tasks={filtered_tasks} selected_task={selected_task} actions={actions} />
-        <TaskList tasks={filtered_tasks} selected_task={selected_task} actions={actions} />
-    </div>
+Tasks = (name) -> rclass
+    reduxProps :
+        "#{name}" :
+            tasks           : rtypes.object
+            selected_task   : rtypes.object
+            search          : rtypes.object
+            include_done    : rtypes.object
+            include_deleted : rtypes.object
 
-render = (flux, project_id, path) ->
-    name = flux_name(project_id, path)
-    actions = flux.getActions(name)
+    propTypes :
+        actions : rtypes.object
+
+    # Pure function
+    filter_tasks : (tasks) ->
+            split = misc.search_split(search)
+            tasks.filter (task) ->
+                misc.search_match(task.get('desc'), split) and
+                (include_deleted or not task.get('deleted')) and
+                (include_done or not task.get('done'))
+
+    render : ->
+        filtered_tasks = @filter_tasks(@props.tasks)
+        <div>
+            <TasksTop tasks={filtered_tasks} search={search} actions={actions} include_done={include_done} include_deleted={include_deleted} />
+            <TasksButtons tasks={filtered_tasks} selected_task={selected_task} actions={actions} />
+            <TaskList tasks={filtered_tasks} selected_task={selected_task} actions={actions} />
+        </div>
+
+render = (redux, project_id, path) ->
+    name = redux_name(project_id, path)
+    actions = redux.getActions(name)
     connect_to =
-        tasks : name
-        selected_task : name
-        search : name
-        include_done : name
-        include_deleted : name
 
+    Tasks_connected = Tasks(name)
+    <Redux redux={redux}>
+        <Tasks_connected actions={actions} />
+    </Redux>
 
-    <Flux flux={flux} connect_to={connect_to}>
-        <Tasks actions={actions} />
-    </Flux>
+exports.render = (project_id, filename, dom_node, redux) ->
+    console.log("editor_codemirror: render")
+    init_redux(redux, project_id, filename)
+    React.render(render(redux, project_id, filename), dom_node)
 
-exports.free = (project_id, path, dom_node, flux) ->
+exports.hide = (project_id, filename, dom_node, redux) ->
+    console.log("editor_codemirror: hide")
     ReactDOM.unmountComponentAtNode(dom_node)
 
-exports.render = (project_id, path, dom_node, flux) ->
-    init_flux(flux, project_id, path)
-    ReactDOM.render(render(flux, project_id, path), dom_node)
+exports.show = (project_id, filename, dom_node, redux) ->
+    console.log("editor_codemirror: show")
+    React.render(render(redux, project_id, filename), dom_node)
 
-exports.hide = (project_id, path, dom_node, flux) ->
+exports.free = (project_id, filename, dom_node, redux) ->
+    console.log("editor_codemirror: free")
+    fname = redux_name(project_id, filename)
+    store = redux.getStore(fname)
+    if not store?
+        return
     ReactDOM.unmountComponentAtNode(dom_node)
-
-exports.show = (project_id, path, dom_node, flux) ->
-    ReactDOM.render(render(flux, project_id, path), dom_node)
+    store.syncstring?.disconnect_from_session()
+    delete store.state
+    # It is *critical* to first unmount the store, then the actions,
+    # or there will be a huge memory leak.
+    redux.removeStore(fname)
+    redux.removeActions(fname)
