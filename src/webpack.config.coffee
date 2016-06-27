@@ -195,26 +195,42 @@ htmlMinifyOpts =
     collapseWhitespace : true
     conservativeCollapse : true
 
-# when base_url_html is set, it is hardcoded into the index page
+# when base_url_html is set, it is hardcoded into the app.html page
 # it mimics the logic of the hub, where all trailing slashes are removed
 # i.e. the production page has a base url of '' and smc-in-smc has '/.../...'
 base_url_html = BASE_URL # do *not* modify BASE_URL, it's needed with a '/' down below
 while base_url_html and base_url_html[base_url_html.length-1] == '/'
     base_url_html = base_url_html.slice(0, base_url_html.length-1)
 
-# this is the main index.html file, which should be served without any caching
-jade2html = new HtmlWebpackPlugin
+# this is the main app.html file, which should be served without any caching
+app_html = new HtmlWebpackPlugin
                         date             : BUILD_DATE
                         title            : TITLE
                         BASE_URL         : base_url_html
                         git_rev          : GIT_REV
                         mathjax          : MATHJAX_URL
-                        filename         : 'index.html'
+                        filename         : 'app.html'
                         chunksSortMode   : smcChunkSorter
                         hash             : PRODMODE
-                        template         : path.join(INPUT, 'index.jade')
+                        template         : path.join(INPUT, 'app.pug')
                         minify           : htmlMinifyOpts
                         GOOGLE_ANALYTICS : GOOGLE_ANALYTICS
+
+# this is the initial landing page, redirecting to /app if authenticated or showing SMC information
+landing_html = new HtmlWebpackPlugin
+                        date             : BUILD_DATE
+                        title            : TITLE
+                        BASE_URL         : base_url_html
+                        git_rev          : GIT_REV
+                        mathjax          : MATHJAX_URL
+                        filename         : 'landing.html'
+                        chunks           : ['css', 'lib'] # the idea is, to also load the lib.js to cache it!
+                        chunksSortMode   : smcChunkSorter
+                        template         : path.join(INPUT, 'landing.pug')
+                        minify           : htmlMinifyOpts
+                        hash             : PRODMODE
+                        GOOGLE_ANALYTICS : GOOGLE_ANALYTICS
+
 
 # the following set of plugins renders the policy pages
 # they do *not* depend on any of the chunks, but rather specify css and favicon dependencies
@@ -331,7 +347,8 @@ plugins = [
     #provideGlobals,
     setNODE_ENV,
     banner,
-    jade2html,
+    app_html,
+    landing_html,
     videoChatSide,
     videoChatCell,
     #commonsChunkPlugin,
@@ -437,7 +454,8 @@ module.exports =
             { test: /\.(ttf|eot)(\?v=[0-9].[0-9].[0-9])?$/, loader: "file-loader?name=#{hashname}" },
             # { test: /\.css$/,    loader: 'style!css' },
             { test: /\.css$/, loaders: ["style-loader", "css-loader?#{cssConfig}"]}, # loader: extractTextCss }, #
-            { test: /\.jade$/, loader: 'jade' },
+            { test: /\.jade$/, loader: 'jade-loader' },
+            { test: /\.pug$/, loader: 'jade-loader' },
         ]
 
     resolve:

@@ -39,39 +39,27 @@ html
     //- ****** faviconit.com favicons ******
 
   body
-    style.
-      #{require('!css?minimize!smc-startup-style.css')}
-    div#smc-startup-banner
-      div
-        img(src="#{ require('!url?mimetype=image/svg+xml!salvus-icon.svg') }")
-      div
-        div.banner-blink
-            | Loading
-            br/
-            | #{ htmlWebpackPlugin.options.title } ...
-        div.banner-error
-          div.message
-            | Something bad must have happened.
-            br/
-            | Try <a href="javascript:location.reload(true);">reloading the page</a> while holding your shift-key.
-        div(style="clear: both;")
-    div#smc-startup-banner-status
-      | Initializing ...
-
-    //- this sets the global window.smc_base_url: either statically via the BASE_URL template variable, or dynamically via hub
     - var BASE_URL = htmlWebpackPlugin.options.BASE_URL
-    if typeof BASE_URL !== "undefined" && BASE_URL !== null
-        script(type="text/javascript").
-            window.smc_base_url='#{BASE_URL}';
-    else
-        script(type="text/javascript" src="base_url.js")
 
-    script(type="text/javascript").
-        function smcLoadStatus(msg) {
-        try { document.getElementById("smc-startup-banner-status").innerHTML = msg; } catch(e) {}}
+    div.jumbotron
+        div.container
+            h1
+              img(src="#{ require('!url?mimetype=image/svg+xml!salvus-icon.svg') }"
+                  width="45" height="45"
+                  style="background-color:#357ebd; border-radius:5px; vertical-align:baseline;")
+              |  #{htmlWebpackPlugin.options.title}
+            p.
+                Computational mathematics in the cloud!
+            p
+                a(class='btn btn-primary btn-lg' href="#{BASE_URL}/app") Start Application
 
-    //- Billing related functionality
-    script(type="text/javascript" src="https://js.stripe.com/v2/")
+    div.container
+        div.row
+            div.col-md-6.
+                Welcome to #{htmlWebpackPlugin.options.title}.
+
+            div.col-md-6
+                | Youtube Video
 
     //- if we have a GA token, insert the google analytics async script
     - var GOOGLE_ANALYTICS = htmlWebpackPlugin.options.GOOGLE_ANALYTICS
@@ -93,9 +81,7 @@ html
             //- Sends a pageview hit from the tracker just created.
             google_analytics('send', 'pageview');
 
-        <!-- Sets the `async` attribute to load the script asynchronously. -->
+        //- Sets the `async` attribute to load the script asynchronously.
         script(async src='//www.google-analytics.com/analytics.js')
         //--- End Google Analytics ---
 
-    //- Hidden div to accurately determine if page is in responsive mode
-    div.salvus-responsive-mode-test

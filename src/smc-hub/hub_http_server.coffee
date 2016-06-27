@@ -11,6 +11,7 @@ ms          = require("ms")
 async       = require('async')
 body_parser = require('body-parser')
 express     = require('express')
+cookieParser = require('cookie-parser')
 formidable  = require('formidable')
 http_proxy  = require('http-proxy')
 http        = require('http')
@@ -20,15 +21,10 @@ misc    = require('smc-util/misc')
 {defaults, required} = misc
 
 misc_node    = require('smc-util-node/misc_node')
-
 hub_register = require('./hub_register')
-
 auth         = require('./auth')
-
 access       = require('./access')
-
 hub_proxy    = require('./proxy')
-
 hub_projects = require('./projects')
 
 # Rendering stripe invoice server side to PDF in memory
@@ -52,6 +48,7 @@ exports.init_express_http_server = (opts) ->
     router = express.Router()
     app    = express()
     router.use(body_parser.urlencoded({ extended: true }))
+    app.use(cookieParser())
 
     # The webpack content. all files except for unhashed .html should be cached long-term ...
     webpackHeaderControl = (res, path) ->
@@ -68,7 +65,32 @@ exports.init_express_http_server = (opts) ->
         express.static(path_module.join(STATIC_PATH, 'policies'), {maxAge: 0})
 
     router.get '/', (req, res) ->
-        res.sendFile(path_module.join(STATIC_PATH, 'index.html'), {maxAge: 0})
+        # this mimics some code from hub.coffee
+        # goal is to direct to the actual page, iff there is a valid cookie. that's all.
+        show_landing = ->
+            res.sendFile(path_module.join(STATIC_PATH, 'landing.html'), {maxAge: 0})
+        if req.cookies["#{opts.base_url}remember_me"]?
+            value = req.cookies["#{opts.base_url}remember_me"]
+            x = value.split('$')
+            winston.debug("cookie value: #{value} → #{misc.to_json(x)}")
+            if x.length == 4
+                hash = auth.generate_hash(x[0], x[1], x[2], x[3])
+                winston.debug("checking for remember_me cookie with hash='#{hash.slice(0,15)}...'") # don't put all in log -- could be dangerous
+                opts.database.get_remember_me
+                    hash : hash
+                    cb   : (error, signed_in_mesg) =>
+                        winston.debug("remember_me: got error=#{error}, signed_in_mesg=#{misc.to_json(signed_in_mesg)}")
+                        if not error? and signed_in_mesg?
+                            res.redirect("#{opts.base_url}/app")
+                        else
+                            show_landing()
+            else
+                show_landing()
+        else
+            show_landing()
+
+    router.get '/app', (req, res) ->
+        res.sendFile(path_module.join(STATIC_PATH, 'app.html'), {maxAge: 0})
 
     # The base_url javascript, which sets the base_url for the client.
     router.get '/base_url.js', (req, res) ->
