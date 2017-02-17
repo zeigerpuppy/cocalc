@@ -6,7 +6,7 @@ COPYRIGHT : (c) 2017 SageMath, Inc.
 LICENSE   : AGPLv3
 ###
 
-# Bucket used for cheaper longterm storage of blobs (outside of rethinkdb).
+# Bucket used for cheaper longterm storage of blobs (outside of PostgreSQL).
 # NOTE: We should add this to site configuration, and have it get read once when first
 # needed and cached.  Also it would be editable in admin account settings.
 BLOB_GCLOUD_BUCKET = 'smc-blobs'
@@ -14,6 +14,7 @@ BLOB_GCLOUD_BUCKET = 'smc-blobs'
 async   = require('async')
 snappy  = require('snappy')
 zlib    = require('zlib')
+fs      = require('fs')
 
 misc_node = require('smc-util-node/misc_node')
 
@@ -36,6 +37,10 @@ class exports.PostgreSQL extends PostgreSQL
             compress   : undefined # optional compression to use: 'gzip', 'zlib', 'snappy'; only used if blob not already in db.
             level      : -1        # compression level (if compressed) -- see https://github.com/expressjs/compression#level
             cb         : required  # cb(err, ttl actually used in seconds); ttl=0 for infinite ttl
+        if not Buffer.isBuffer(opts.blob)
+            # CRITICAL: We assume everywhere below that opts.blob is a
+            # buffer, e.g., in the .toString('hex') method!
+            opts.blob = new Buffer(opts.blob)
         if not opts.uuid?
             opts.uuid = misc_node.uuidsha1(opts.blob)
         else if opts.check
@@ -43,6 +48,11 @@ class exports.PostgreSQL extends PostgreSQL
             if uuid != opts.uuid
                 opts.cb("the sha1 uuid (='#{uuid}') of the blob must equal the given uuid (='#{opts.uuid}')")
                 return
+        if not misc.is_valid_uuid_string(opts.uuid)
+            opts.cb("uuid is invalid")
+            return
+        dbg = @_dbg("save_blob(uuid='#{opts.uuid}')")
+        dbg()
         rows = ttl = undefined
         async.series([
             (cb) =>
@@ -53,7 +63,7 @@ class exports.PostgreSQL extends PostgreSQL
                         rows = x.rows; cb(err)
             (cb) =>
                 if rows.length == 0 and opts.compress
-                    # compression requested and blob not already saved, so we compress blob
+                    dbg("compression requested and blob not already saved, so we compress blob")
                     switch opts.compress
                         when 'gzip'
                             zlib.gzip opts.blob, {level:opts.level}, (err, blob) =>
@@ -70,13 +80,13 @@ class exports.PostgreSQL extends PostgreSQL
                     cb()
             (cb) =>
                 if rows.length == 0
-                    # nothing in DB, so we insert the blob.
+                    dbg("nothing in DB, so we insert the blob.")
                     ttl = opts.ttl
                     @_query
                         query  : "INSERT INTO blobs"
                         values :
                             id         : opts.uuid
-                            blob       : opts.blob
+                            blob       : '\\x'+opts.blob.toString('hex')
                             project_id : opts.project_id
                             count      : 0
                             size       : opts.blob.length
@@ -85,7 +95,7 @@ class exports.PostgreSQL extends PostgreSQL
                             expire     : if ttl then expire_time(ttl)
                         cb     : cb
                 else
-                    # blob already in the DB, so see if we need to change the expire time
+                    dbg("blob already in the DB, so see if we need to change the expire time")
                     @_extend_blob_ttl
                         expire : rows[0].expire
                         ttl    : opts.ttl
@@ -101,7 +111,9 @@ class exports.PostgreSQL extends PostgreSQL
             ttl    : required     # requested ttl -- extend expire to at least this
             uuid   : required
             cb     : required     # (err, effective ttl (with 0=oo))
-
+        if not misc.is_valid_uuid_string(opts.uuid)
+            opts.cb("uuid is invalid")
+            return
         if not opts.expire
             # ttl already infinite -- nothing to do
             opts.cb(undefined, 0)
@@ -135,6 +147,9 @@ class exports.PostgreSQL extends PostgreSQL
                                 # (for faster access e.g., 20ms versus 5ms -- i.e., not much faster; gcloud is FAST too.)
             touch      : true
             cb         : required   # cb(err) or cb(undefined, blob_value) or cb(undefined, undefined) in case no such blob
+        if not misc.is_valid_uuid_string(opts.uuid)
+            opts.cb("uuid is invalid")
+            return
         x    = undefined
         blob = undefined
         async.series([
@@ -204,6 +219,9 @@ class exports.PostgreSQL extends PostgreSQL
         opts = defaults opts,
             uuid : required
             cb   : undefined
+        if not misc.is_valid_uuid_string(opts.uuid)
+            opts.cb?("uuid is invalid")
+            return
         @_query
             query : "UPDATE blobs SET count = count + 1, last_active = NOW()"
             where : "id = $::UUID" : opts.uuid
@@ -222,6 +240,9 @@ class exports.PostgreSQL extends PostgreSQL
             force  : false      # if true, upload even if already uploaded
             remove : false      # if true, deletes blob from database after successful upload to gcloud (to free space)
             cb     : undefined  # cb(err)
+        if not misc.is_valid_uuid_string(opts.uuid)
+            opts.cb?("uuid is invalid")
+            return
         x = undefined
         async.series([
             (cb) =>
@@ -378,7 +399,7 @@ class exports.PostgreSQL extends PostgreSQL
             limit     : 1000               # copy this many in each batch
             map_limit : 1                  # copy this many at once.
             throttle  : 0                  # wait this many seconds between uploads
-            repeat_until_done_s : 0        # if nonzero, waits this many seconds, then recalls this function until nothing gets uploaded.
+            repeat_until_done_s : 0        # if nonzero, waits this many seconds, then calls this function again until nothing gets uploaded.
             errors    : {}                 # used to accumulate errors
             remove    : false
             cb        : required
@@ -388,7 +409,7 @@ class exports.PostgreSQL extends PostgreSQL
         # been copied to Google cloud storage.
         dbg("getting blob id's...")
         @_query
-            query : 'SELECT id, size FROM blos'
+            query : 'SELECT id, size FROM blobs'
             where : "expire IS NULL AND gcloud IS NULL"
             limit : opts.limit
             cb    : all_results (err, v) =>
@@ -475,7 +496,7 @@ class exports.PostgreSQL extends PostgreSQL
         @_query
             query : "UPDATE blobs"
             set   : {expire: null}
-            where : "id::UUID = ANY($)" : opts.uuids
+            where : "id::UUID = ANY($)" : (x for x in opts.uuids when misc.is_valid_uuid_string(x))
             cb    : opts.cb
 
     # If blob has been copied to gcloud, remove the BLOB part of the data
@@ -486,6 +507,9 @@ class exports.PostgreSQL extends PostgreSQL
             uuid   : required   # uuid=sha1-based from blob
             bucket : BLOB_GCLOUD_BUCKET # name of bucket
             cb     : undefined   # cb(err)
+        if not misc.is_valid_uuid_string(opts.uuid)
+            opts.cb?("uuid is invalid")
+            return
         async.series([
             (cb) =>
                 # ensure blob is in gcloud
@@ -520,7 +544,7 @@ class exports.PostgreSQL extends PostgreSQL
     ###
     syncstring_maintenance: (opts) =>
         opts = defaults opts,
-            age_days          : 60    # archive patches of syncstrings that are inactive for at least this long
+            age_days          : 30    # archive patches of syncstrings that are inactive for at least this long
             map_limit         : 1     # how much parallelism to use
             limit             : 1000 # do only this many
             repeat_until_done : true
@@ -563,6 +587,8 @@ class exports.PostgreSQL extends PostgreSQL
                 opts.cb?()
         )
 
+    # Offlines and archives the patch, unless the string is active very recently, in
+    # which case this is a no-op.
     archive_patches: (opts) =>
         opts = defaults opts,
             string_id : required
@@ -570,13 +596,14 @@ class exports.PostgreSQL extends PostgreSQL
             level     : -1   # the default
             cb        : undefined
         dbg = @_dbg("archive_patches(string_id='#{opts.string_id}')")
-        syncstring = patches = blob_uuid = project_id = undefined
+        syncstring = patches = blob_uuid = project_id = last_active =undefined
+        cutoff = misc.minutes_ago(30)
         where = {"string_id = $::CHAR(40)" : opts.string_id}
         async.series([
             (cb) =>
                 dbg("get project_id")
                 @_query
-                    query : "SELECT project_id, archived FROM syncstrings"
+                    query : "SELECT project_id, archived, last_active FROM syncstrings"
                     where : where
                     cb    : one_result (err, x) =>
                         if err
@@ -587,18 +614,31 @@ class exports.PostgreSQL extends PostgreSQL
                             cb("already archived")
                         else
                             project_id = x.project_id
+                            last_active = x.last_active
                             cb()
             (cb) =>
+                if last_active? and last_active >= cutoff
+                    cb(); return
                 dbg("get patches")
                 @_query
-                    query : "SELECT * FROM patches"
+                    query : "SELECT extract(epoch from time) as epoch, * FROM patches"
                     where : where
                     cb    : all_results (err, x) =>
                         patches = x
+                        for p in patches
+                            p.time = new Date(p.epoch*1000)
+                            delete p.epoch
                         cb(err)
             (cb) =>
+                if last_active? and last_active >= cutoff
+                    cb(); return
                 dbg("create blob from patches")
-                blob = new Buffer(JSON.stringify(patches))
+                try
+                    blob = new Buffer(JSON.stringify(patches))
+                catch err
+                    # TODO: This *will* happen if the total length of all patches is too big.
+                    cb(err)
+                    return
                 dbg('save blob')
                 blob_uuid = misc_node.uuidsha1(blob)
                 @save_blob
@@ -609,6 +649,8 @@ class exports.PostgreSQL extends PostgreSQL
                     level      : opts.level
                     cb         : cb
             (cb) =>
+                if last_active? and last_active >= cutoff
+                    cb(); return
                 dbg("update syncstring to indicate patches have been archived in a blob")
                 @_query
                     query : "UPDATE syncstrings"
@@ -616,6 +658,8 @@ class exports.PostgreSQL extends PostgreSQL
                     where : where
                     cb    : cb
             (cb) =>
+                if last_active? and last_active >= cutoff
+                    cb(); return
                 dbg("actually delete patches")
                 @_query
                     query : "DELETE FROM patches"
@@ -675,11 +719,16 @@ class exports.PostgreSQL extends PostgreSQL
                                 v.push(patch)
                             patches = v
                         dbg("insert patches into patches table")
-                        @_query
-                            query    : 'INSERT INTO patches'
-                            values   : patches
-                            conflict : 'ON CONFLICT DO NOTHING'  # in case multiple servers (or this server) are doing this unarchive at once -- this can and does happen sometimes.
-                            cb       : cb
+                        # We break into blocks since there is limit (about 65K) on
+                        # number of params that can be inserted in a single query.
+                        insert_block_size = 1000
+                        f = (i, cb) =>
+                            @_query
+                                query    : 'INSERT INTO patches'
+                                values   : patches.slice(insert_block_size*i, insert_block_size*(i+1))
+                                conflict : 'ON CONFLICT DO NOTHING'  # in case multiple servers (or this server) are doing this unarchive at once -- this can and does happen sometimes.
+                                cb       : cb
+                        async.mapSeries([0...patches.length/insert_block_size], f, cb)
                     (cb) =>
                         async.parallel([
                             (cb) =>
@@ -700,6 +749,9 @@ class exports.PostgreSQL extends PostgreSQL
         opts = defaults opts,
             uuid : required
             cb   : undefined
+        if not misc.is_valid_uuid_string(opts.uuid)
+            opts.cb?("uuid is invalid")
+            return
         gcloud = undefined
         dbg = @_dbg("delete_blob(uuid='#{opts.uuid}')")
         async.series([

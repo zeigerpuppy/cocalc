@@ -353,7 +353,7 @@ class ProjectActions extends Actions
 
                         # Only generate the editor component if we don't have it already
                         # Also regenerate if view type (public/not-public) changes
-                        if not open_files.has(opts.path) or open_files.getIn([opts.path, 'component']).is_public != is_public
+                        if not open_files.has(opts.path) or open_files.getIn([opts.path, 'component'])?.is_public != is_public
                             was_public = open_files.getIn([opts.path, 'component'])?.is_public
                             if was_public? and was_public != is_public
                                 @setState(open_files : store.open_files.delete(opts.path))
@@ -631,7 +631,7 @@ class ProjectActions extends Actions
                     path       : path
                     time       : sort_by_time
                     hidden     : show_hidden
-                    max_time_s : 4*60  # keep trying for up to 4 minutes
+                    max_time_s : 120  # keep trying for up to 2 minutes
                     group      : group
                     cb         : cb
         ], (err, listing) =>
@@ -1600,12 +1600,17 @@ get_directory_listing = (opts) ->
             path       : opts.path
             time       : opts.time
             hidden     : opts.hidden
-            timeout    : 20
+            timeout    : 15
             cb         : (err, x) ->
-                listing     = x
-                listing_err = err
-                # the call itself is successful, even when it returns an error
-                cb()
+                if typeof(err) == 'string' and err.indexOf('error: no such path') != -1
+                    # In this case, the call itself is successful, even when it returns an error; it told
+                    # us there is no such file.
+                    listing_err = err
+                    listing = x
+                    cb()
+                else
+                    listing = x
+                    cb(err)
 
     misc.retry_until_success
         f        : f

@@ -4,10 +4,10 @@ middle of the action, connected to potentially thousands of clients,
 many Sage sessions, and PostgreSQL database.  There are
 many HUBs running.
 
-GPLv3
+AGPLv3
 ###
-require('coffee-cache')
 
+require('coffee-cache')
 
 DEBUG = DEBUG2 = false
 
@@ -796,6 +796,12 @@ class Client extends EventEmitter
             event      : mesg.type
             error      : mesg.error
             account_id : @account_id
+
+    mesg_webapp_error: (mesg) =>
+        winston.debug("webapp_error: #{mesg.msg}")
+        mesg = misc.copy_without(mesg, 'event')
+        mesg.account_id = @account_id
+        database.webapp_error(mesg)
 
     ######################################################
     # Messages: Project Management
@@ -3085,25 +3091,7 @@ Connect to database
 ###
 database = undefined
 
-connect_to_database_rethink = (opts) ->
-    opts = defaults opts,
-        error : 120
-        pool  : program.db_pool
-        cb    : required
-    dbg = (m) -> winston.debug("connect_to_database (rethinkdb): #{m}")
-    if database? # already did this
-        dbg("already done")
-        opts.cb(); return
-    dbg("connecting...")
-    database = require('./rethink').rethinkdb
-        hosts           : program.database_nodes.split(',')
-        database        : program.keyspace
-        error           : opts.error
-        pool            : opts.pool
-        concurrent_warn : program.db_concurrent_warn
-        cb              : opts.cb
-
-connect_to_database_postgresql = (opts) ->
+connect_to_database = (opts) ->
     opts = defaults opts,
         error : undefined   # ignored
         pool  : program.db_pool
@@ -3118,9 +3106,6 @@ connect_to_database_postgresql = (opts) ->
         database : program.keyspace
         concurrent_warn : program.db_concurrent_warn
     database.connect(cb:opts.cb)
-
-connect_to_database = connect_to_database_postgresql
-#connect_to_database = connect_to_database_rethink
 
 # client for compute servers
 compute_server = undefined
@@ -3154,13 +3139,11 @@ update_primus = (cb) ->
 
 #############################################
 # Billing settings
-# How to set in database:
-#    db=require('rethink').rethinkdb();0
-#    db.set_server_setting(cb:console.log, name:'stripe_publishable_key', value:???)
-#    db.set_server_setting(cb:console.log, name:'stripe_secret_key',      value:???)
+# Set using the admin interface in account settings of an admin user.
 #############################################
 stripe  = undefined
-# TODO: this needs to listen to a changefeed on the database for changes to the server_settings table
+# TODO: this could listen to a changefeed on the database
+# for changes to the server_settings table.
 init_stripe = (cb) ->
     dbg = (m) -> winston.debug("init_stripe: #{m}")
     dbg()
@@ -3204,7 +3187,7 @@ init_stripe = (cb) ->
 delete_expired = (cb) ->
     async.series([
         (cb) ->
-            connect_to_database_postgresql(cb:cb)
+            connect_to_database(cb:cb)
         (cb) ->
             database.delete_expired
                 count_only : false
@@ -3234,10 +3217,11 @@ stripe_sync = (dump_only, cb) ->
         (cb) ->
             dbg("get all customers from the database with stripe -- this is a full scan of the database and will take a while")
             # TODO: we could make this way faster by putting an index on the stripe_customer_id field.
-            q = database.table('accounts').filter((r)->r.hasFields('stripe_customer_id'))
-            q = q.pluck('account_id', 'stripe_customer_id', 'stripe_customer')
-            q.run (err, x) ->
-                users = x; cb(err)
+            database._query
+                query : 'SELECT account_id, stripe_customer_id, stripe_customer FROM accounts WHERE stripe_customer_id IS NOT NULL'
+                cb    : (err, x) ->
+                    users = x?.rows
+                    cb(err)
         (cb) ->
             dbg("dump stripe_customer data to file for statistical analysis")
             target = "#{process.env.HOME}/stripe/"
@@ -3520,6 +3504,7 @@ add_user_to_project = (project_id, email_address, cb) ->
 command_line = () ->
     program = require('commander')          # command line arguments -- https://github.com/visionmedia/commander.js/
     daemon  = require("start-stop-daemon")  # don't import unless in a script; otherwise breaks in node v6+
+    default_db = process.env.PGHOST ? 'localhost'
 
     program.usage('[start/stop/restart/status/nodaemon] [options]')
         .option('--port <n>', 'port to listen on (default: 5000; 0 -- do not start)', ((n)->parseInt(n)), 5000)
@@ -3529,7 +3514,7 @@ command_line = () ->
         .option('--pidfile [string]', 'store pid in this file (default: "data/pids/hub.pid")', String, "data/pids/hub.pid")
         .option('--logfile [string]', 'write log to this file (default: "data/logs/hub.log")', String, "data/logs/hub.log")
         .option('--statsfile [string]', 'if set, this file contains periodically updated metrics (default: null, suggest value: "data/logs/stats.json")', String, null)
-        .option('--database_nodes <string,string,...>', 'comma separated list of ip addresses of all database nodes in the cluster', String, process.env.PGHOST ? 'localhost')
+        .option('--database_nodes <string,string,...>', "database address (default: '#{default_db}')", String, default_db)
         .option('--keyspace [string]', 'Database name to use (default: "smc")', String, 'smc')
         .option('--passwd [email_address]', 'Reset password of given user', String, '')
         .option('--update', 'Update schema and primus on startup (always true for --dev; otherwise, false)')

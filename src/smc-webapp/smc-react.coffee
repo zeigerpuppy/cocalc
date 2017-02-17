@@ -580,6 +580,7 @@ react_component = (x) ->
     return C
 
 COUNT = false
+TIME = false
 if COUNT
     # Use these in the console:
     #  reset_render_count()
@@ -598,6 +599,14 @@ if COUNT
         return {counts:render_count, total:total}
     window.reset_render_count = ->
         render_count = {}
+else if TIME
+    rclass = (x) =>
+        t0 = performance.now()
+        r = react_component(x)
+        t1 = performance.now()
+        if t1 - t0 > 1
+            console.log r.displayName, "took", t1 - t0, "ms of time"
+        return r
 else
     rclass = react_component
 
@@ -614,6 +623,11 @@ Redux = React.createClass
 # Public interface
 exports.is_redux = (obj) -> obj instanceof AppRedux
 exports.is_redux_actions = (obj) -> obj instanceof Actions
+
+# Canonical name to use for Redux store associated to a given project/path.
+# TODO: this code is also in many editors -- make them all just use this.
+exports.redux_name = (project_id, path) -> "editor-#{project_id}-#{path}"
+
 
 exports.rclass   = rclass    # use rclass instead of React.createClass to get access to reduxProps support
 exports.rtypes   = rtypes    # has extra rtypes.immutable, needed for reduxProps to leave value as immutable

@@ -364,7 +364,8 @@ class exports.Connection extends EventEmitter
             # a sort of offline mode ?  I have not worked out how to handle this yet.
             #console.log(err)
 
-    is_signed_in: => !!@_signed_in
+    is_signed_in: =>
+        return @is_connected() and !!@_signed_in
 
     # account_id or project_id of this client
     client_id: () =>
@@ -1353,6 +1354,9 @@ class exports.Connection extends EventEmitter
     #################################################
     log_error: (error) =>
         @call(message : message.log_client_error(error:error))
+
+    webapp_error: (opts) =>
+        @call(message : message.webapp_error(opts))
 
 
     ######################################################################

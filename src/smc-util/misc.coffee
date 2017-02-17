@@ -901,7 +901,7 @@ exports.async_debounce = (opts) ->
     if cb?
         callbacks.push(cb)
     # Reset next callbacks
-    state.next_callbacks = []
+    delete state.next_callbacks
     #console.log("doing run with #{callbacks.length} callbacks")
 
     f (err) =>
@@ -911,8 +911,8 @@ exports.async_debounce = (opts) ->
             cb?(err)
         callbacks = []  # ensure these callbacks don't get called again
         #console.log("finished -- have state.next_callbacks of length #{state.next_callbacks.length}")
-        if state.next_callbacks.length > 0 and not state.timer?
-            # new cb requests came in since when we started, so call when we next can.
+        if state.next_callbacks? and not state.timer?
+            # new calls came in since when we started, so call when we next can.
             #console.log("new callbacks came in #{state.next_callbacks.length}")
             call_again()
 
@@ -1224,6 +1224,9 @@ exports.timestamp_cmp = (a,b,field='timestamp') ->
 
 timestamp_cmp0 = (a,b,field='timestamp') ->
     return exports.cmp_Date(a[field], b[field])
+
+exports.field_cmp = (field) ->
+    return (a, b) -> exports.cmp(a[field], b[field])
 
 #####################
 # temporary location for activity_log code, shared by front and backend.
@@ -1670,6 +1673,12 @@ exports.done2 = (args...) -> _done(2, args...)
 
 smc_logger_timestamp = smc_logger_timestamp_last = smc_start_time = new Date().getTime() / 1000.0
 
+exports.get_start_time_ts = ->
+    return new Date(smc_start_time * 1000)
+
+exports.get_uptime = ->
+    return seconds2hms((new Date().getTime() / 1000.0) - smc_start_time)
+
 exports.log = () ->
     smc_logger_timestamp = new Date().getTime() / 1000.0
     t  = seconds2hms(smc_logger_timestamp - smc_start_time)
@@ -1684,9 +1693,14 @@ exports.log = () ->
         console.log_original(prompt, msg, args...)
     smc_logger_timestamp_last = smc_logger_timestamp
 
-if not exports.RUNNING_IN_NODE and window?
-    window.console.log_original = window.console.log
-    window.console.log = exports.log
+exports.wrap_log = () ->
+    if not exports.RUNNING_IN_NODE and window?
+        window.console.log_original = window.console.log
+        window.console.log = exports.log
+
+# to test exception handling
+exports.this_fails = ->
+    return exports.op_to_function('noop')
 
 # derive the console initialization filename from the console's filename
 # used in webapp and console_server_child

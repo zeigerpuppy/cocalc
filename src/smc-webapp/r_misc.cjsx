@@ -716,23 +716,36 @@ exports.Markdown = rclass
         return @props.value != newProps.value or not underscore.isEqual(@props.style, newProps.style)
 
     _update_escaped_chars: ->
+        if not @_isMounted
+            return
         node = $(ReactDOM.findDOMNode(@))
         node.html(node[0].innerHTML.replace(/\\\$/g, '$'))
 
     _update_mathjax: (cb) ->
+        if not @_isMounted  # see https://github.com/sagemathinc/smc/issues/1689
+            return
         #if DEBUG then console.log('Markdown._update_mathjax: @_x?.has_mathjax', @_x?.has_mathjax, @_x)
         if @_x?.has_mathjax
-            # theoretically, cb is called more than once, but this is just one element
-            $(ReactDOM.findDOMNode(@)).mathjax(cb: cb)
+            $(ReactDOM.findDOMNode(@)).mathjax
+                cb : () =>
+                    # Awkward code, since cb may be called more than once.
+                    cb?()
+                    cb = undefined
         else
             cb()
 
     _update_links: ->
+        if not @_isMounted
+            return
         $(ReactDOM.findDOMNode(@)).process_smc_links(project_id:@props.project_id, file_path:@props.file_path)
 
     update_content: ->
+        if not @_isMounted
+            return
         # orchestrates the _update_* methods
         @_update_mathjax =>
+            if not @_isMounted
+                return
             @_update_escaped_chars()
             @_update_links()   # this MUST be after update_escaped_chars -- see https://github.com/sagemathinc/smc/issues/1391
 
@@ -740,7 +753,13 @@ exports.Markdown = rclass
         @update_content()
 
     componentDidMount: ->
+        @_isMounted = true
         @update_content()
+
+    componentWillUnmount: ->
+        # see https://facebook.github.io/react/blog/2015/12/16/ismounted-antipattern.html
+        # and https://github.com/sagemathinc/smc/issues/1689
+        @_isMounted = false
 
     to_html: ->
         if @props.value
@@ -823,6 +842,9 @@ exports.Tip = Tip = rclass
         delayHide : 100
         rootClose : false
 
+    getInitialState: ->
+        display_trigger : false
+
     render_title: ->
         <span>{<Icon name={@props.icon}/> if @props.icon} {@props.title}</span>
 
@@ -848,15 +870,27 @@ exports.Tip = Tip = rclass
             </Tooltip>
 
     render: ->
-        <OverlayTrigger
-            placement = {@props.placement}
-            overlay   = {@render_popover()}
-            delayShow = {@props.delayShow}
-            delayHide = {@props.delayHide}
-            rootClose = {@props.rootClose}
+        if not @state.display_trigger
+            <span style={@props.style}
+                onMouseEnter={=>@setState(display_trigger:true)}
             >
-            <span style={@props.style}>{@props.children}</span>
-        </OverlayTrigger>
+                {@props.children}
+            </span>
+        else
+            <OverlayTrigger
+                placement = {@props.placement}
+                overlay   = {@render_popover()}
+                delayShow = {@props.delayShow}
+                delayHide = {@props.delayHide}
+                rootClose = {@props.rootClose}
+            >
+                <span
+                    style={@props.style}
+                    onMouseLeave={=>@setState(display_trigger:false)}
+                >
+                    {@props.children}
+                </span>
+            </OverlayTrigger>
 
 exports.SaveButton = rclass
     displayName : 'Misc-SaveButton'
@@ -1050,6 +1084,11 @@ project_warning_opts = (opts) ->
         email_address  : email_address
     return x
 
+exports.CourseProjectExtraHelp = CourseProjectExtraHelp = ->
+    <div style={marginTop:'10px'}>
+       If you have already paid, you can go to the settings in your project and click the "Adjust  your quotas..." button, then click the checkboxes next to network and member hosting.  If it says you do not have enough quota, visit the Upgrades tab in account settings, see where the upgrades are, remove them from another project, then try again.
+    </div>
+
 exports.CourseProjectWarning = (opts) ->
     {total, used, avail, course_info, course_warning, account_id, email_address} = project_warning_opts(opts)
     if not course_warning
@@ -1073,7 +1112,7 @@ exports.CourseProjectWarning = (opts) ->
         label = 'Warning'
     else
         if is_student
-            deadline  = <span>Your instructor requires you to {action} now to continuing using this project.</span>
+            deadline  = <span>Your instructor requires you to {action} now to continuing using this project.{<CourseProjectExtraHelp/> if total>0}</span>
         else
             deadline = <span>Your student must buy a course subscription to continue using this project.</span>
         style = 'danger'

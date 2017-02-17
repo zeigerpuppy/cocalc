@@ -24,7 +24,7 @@
  ButtonToolbar, Popover, OverlayTrigger, SplitButton, MenuItem, Alert, Checkbox} =  require('react-bootstrap')
 misc = require('smc-util/misc')
 {ActivityDisplay, DeletedProjectWarning, DirectoryInput, Icon, Loading, ProjectState, SAGE_LOGO_COLOR
- SearchInput, TimeAgo, ErrorDisplay, Space, Tip, LoginLink, Footer} = require('./r_misc')
+ SearchInput, TimeAgo, ErrorDisplay, Space, Tip, LoginLink, Footer, CourseProjectExtraHelp} = require('./r_misc')
 {FileTypeSelector, NewFileButton} = require('./project_new')
 
 {BillingPageLink, BillingPageForCourseRedux, PayCourseFee}     = require('./billing')
@@ -1810,7 +1810,8 @@ ProjectFilesNew = rclass
         <span><Icon name='plus-circle' /> Create</span>
 
     file_dropdown_item: (i, ext) ->
-        data = file_associations[ext]
+        {file_options} = require('./editor')
+        data = file_options('x.' + ext)
         <MenuItem eventKey=i key={i} onClick={=>@on_menu_item_clicked(ext)}>
             <Icon name={data.icon.substring(3)} /> <span style={textTransform:'capitalize'}>{data.name} </span> <span style={color:'#666'}>(.{ext})</span>
         </MenuItem>
@@ -2033,9 +2034,11 @@ exports.ProjectFiles = rclass ({name}) ->
         </div>
 
     render_course_payment_required: () ->
+        cards = @props.customer?.sources?.total_count ? 0
         <Alert bsStyle='danger'>
             <h4 style={padding: '2em'}>
                 <Icon name='exclamation-triangle'/> Error: Your instructor requires you to pay the course fee for this project.
+                {<CourseProjectExtraHelp/> if cards}
             </h4>
             {@render_upgrade_in_place()}
         </Alert>

@@ -19,12 +19,9 @@
 #
 ###############################################################################
 
-
 ###
 #
 # Library for working with JSON messages for Salvus.
-#
-# (c) 2012, William Stein
 #
 # We use functions to work with messages to ensure some level of
 # consistency, defaults, and avoid errors from typos, etc.
@@ -851,7 +848,26 @@ message
     event : 'log_client_error'
     error : required
 
-
+message
+    event        : 'webapp_error'
+    name         : required  # string
+    message      : required  # string
+    comment      : undefined # string
+    stacktrace   : undefined # string
+    file         : undefined # string
+    path         : undefined # string
+    lineNumber   : undefined # int
+    columnNumber : undefined # int
+    severity     : undefined # string
+    browser      : undefined # string, how feature.coffee detected the browser
+    mobile       : undefined # boolean, feature.coffee::IS_MOBILE
+    responsive   : undefined # boolean, feature.coffee::is_responsive_mode
+    user_agent   : undefined # string
+    smc_version  : undefined # string
+    build_date   : undefined # string
+    smc_git_rev  : undefined # string
+    uptime       : undefined # string
+    start_time   : undefined # timestamp
 
 
 #############################################

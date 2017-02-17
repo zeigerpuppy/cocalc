@@ -1,20 +1,32 @@
+###############################################################################
+#
+# SageMathCloud: A collaborative web-based interface to Sage, IPython, LaTeX and the Terminal.
+#
+#    Copyright (C) 2016, Sagemath Inc.
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+###############################################################################
+
 ###
-SageMathCloud, Copyright (C) 2016, Sagemath Inc.
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
----
-
-RethinkDB-backed time-log database-based synchronized editing
+Database-backed time-log database-based synchronized editing
 
 [TODO: High level description of algorithm here, or link to article.]
 ###
 
-# How big of files can be opened
-MAX_FILE_SIZE_MB = 4
+# How big of files we allow users to open using syncstrings.
+MAX_FILE_SIZE_MB = 2
 
 # Client -- when it has this syncstring open and connected -- will touch the
 # syncstring every so often so that it stays opened in the local hub,
@@ -236,6 +248,15 @@ class SortedPatchList extends EventEmitter
         oldest = undefined
         for x in patches
             if x?
+                if not misc.is_date(x.time)
+                    # ensure that time is not a string representation of a time
+                    try
+                        x.time = new Date(x.time)
+                        if isNaN(x.time)  # ignore bad times
+                            continue
+                    catch err
+                        # ignore invalid times
+                        continue
                 t   = x.time - 0
                 cur = @_times[t]
                 if cur?
@@ -429,21 +450,22 @@ class SortedPatchList extends EventEmitter
         opts = defaults opts,
             milliseconds : false
             trunc        : 80
+            log          : console.log
         s = undefined
         i = 0
         prev_cutoff = @newest_snapshot_time()
         for x in @_patches
             tm = x.time
             tm = if opts.milliseconds then tm - 0 else tm.toLocaleString()
-            console.log("-----------------------------------------------------\n", i, x.user_id, tm, misc.trunc_middle(JSON.stringify(x.patch), opts.trunc))
+            opts.log("-----------------------------------------------------\n", i, x.user_id, tm,  misc.trunc_middle(JSON.stringify(x.patch), opts.trunc))
             if not s?
                 s = x.snapshot ? ''
             if not x.prev? or @_times[x.prev - 0] or +x.prev >= +prev_cutoff
                 t = apply_patch(x.patch, s)
             else
-                console.log("prev=#{x.prev} missing, so not applying")
+                opts.log("prev=#{x.prev} missing, so not applying")
             s = t[0]
-            console.log((if x.snapshot then "(SNAPSHOT) " else "           "), t[1], JSON.stringify(misc.trunc_middle(s, opts.trunc).trim()))
+            opts.log((if x.snapshot then "(SNAPSHOT) " else "           "), t[1], JSON.stringify(misc.trunc_middle(s, opts.trunc).trim()))
             i += 1
         return
 
@@ -515,7 +537,12 @@ class SyncDoc extends EventEmitter
         @_save_interval = opts.save_interval
         @_my_patches    = {}  # patches that this client made during this editing session.
 
-        ## window.smc[@_path] = @  # for debugging
+        # For debugging -- this is a (slight) security risk in production.
+        ###
+        if window?
+            window.syncstrings ?= {}
+            window.syncstrings[@_path] = @
+        ###
 
         #dbg = @dbg("constructor(path='#{@_path}')")
         #dbg('connecting...')
@@ -561,7 +588,7 @@ class SyncDoc extends EventEmitter
     # Version of the document at a given point in time; if no
     # time specified, gives the version right now.
     version: (time) =>
-        return @_patch_list.value(time)
+        return @_patch_list?.value(time)
 
     # Compute version of document if the patches at the given times were simply not included.
     # This is a building block that is used for implementing undo functionality for client editors.
@@ -1032,6 +1059,8 @@ class SyncDoc extends EventEmitter
     # the last call is discarded.
     # NOTE: no-op if only one user or cursors not enabled for this doc
     set_cursor_locs: (locs) =>
+        if @_closed
+            return
         if @_users.length <= 2
             # Don't bother in special case when only one user (plus the project -- for 2 above!)
             # since we never display the user's
@@ -1122,6 +1151,7 @@ class SyncDoc extends EventEmitter
             interval : @_save_interval
             state    : @_save_debounce
             cb       : cb
+        return
 
     # Create and store in the database a snapshot of the state
     # of the string at the given point in time.  This should
@@ -1174,6 +1204,14 @@ class SyncDoc extends EventEmitter
         if not x?  # we allow for x itself to not be defined since that simplifies other code
             return
         time    = x.get('time')
+        if not misc.is_date(time)
+            try
+                time = new Date(time)
+                if isNaN(time)  # ignore patches with bad times
+                    return
+            catch err
+                # ignore patches with invalid times
+                return
         user_id = x.get('user_id')
         sent    = x.get('sent')
         prev    = x.get('prev')
@@ -1508,11 +1546,14 @@ class SyncDoc extends EventEmitter
     # has_uncommitted_changes below for determining whether there are changes
     # that haven't been commited to the database yet.
     has_unsaved_changes: () =>
-        return misc.hash_string(@get()) != @hash_of_saved_version()
+        return @hash_of_live_version() != @hash_of_saved_version()
 
     # Returns hash of last version saved to disk (as far as we know).
     hash_of_saved_version: =>
         return @_syncstring_table?.get_one()?.getIn(['save', 'hash'])
+
+    hash_of_live_version: =>
+        return misc.hash_string(@get())
 
     # Initiates a save of file to disk, then if cb is set, waits for the state to
     # change to done before calling cb.
@@ -1667,6 +1708,24 @@ class SyncDoc extends EventEmitter
     # safe for the user to close their browser.
     has_uncommitted_changes: () =>
         return @_patches_table?.has_uncommitted_changes()
+
+    ###
+    _test_random_edit: () =>
+        s = @get()
+        i = misc.randint(0, s.length-1)
+        if Math.random() <= .2
+            # delete text
+            s = s.slice(0,i) + s.slice(i-misc.randint(1,25))
+        else
+            # insert about 25 characters at random
+            s = s.slice(0,i) + Math.random().toString(36).slice(2) + s.slice(i)
+        @set(s)
+
+    test_random_edits: (opts) =>
+        opts = defaults opts,
+            number : 5
+            cb     : undefined
+    ###
 
 # A simple example of a document.  Uses this one by default
 # if nothing explicitly passed in for doc in SyncString constructor.

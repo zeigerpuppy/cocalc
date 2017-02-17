@@ -156,6 +156,27 @@ describe 'testing working with blobs: ', ->
                         cb(err)
         ], done)
 
+    it 'tries to save a blob with an invalid uuid and gets an error', (done) ->
+        db.save_blob
+            uuid       : 'not a uuid'
+            blob       : new Buffer("This is a test blob")
+            project_id : project_id
+            cb         : (err) ->
+                expect(err).toEqual('uuid is invalid')
+                done()
+
+    it 'save a string blob (with a null byte!), and confirms it works (properly converted to Buffer)', (done) ->
+        async.series([
+            (cb) ->
+                db.save_blob(blob: 'my blob', project_id: project_id, cb: cb)
+            (cb) ->
+                db.get_blob
+                    uuid : uuidsha1('my blob')
+                    cb   : (err, blob2) ->
+                        expect(blob2?.toString()).toEqual('my blob')
+                        cb(err)
+        ], done)
+
     it 'creating 50 blobs and verifying that 50 are in the table', (done) ->
         async.series([
             (cb) ->
@@ -451,12 +472,23 @@ describe 'testing file use notifications table: ', ->
     it 'creates another project', (done) ->
         db.create_project(account_id:account_id, title:"Test project 2", description:"The description 2",\
                     cb:(err, x) => project_id1=x; done(err))
+
     it "tests recording activity on another file '#{path1}'", (done) ->
         db.record_file_use(project_id: project_id1, path:path1, account_id:account_id, action:"edit", cb:done)
+
     it "gets activity only for the second project and checks there is only one entry", (done) ->
         db.get_file_use(project_id: project_id1,  max_age_s : 1000, cb:(err, x)->  expect(x.length).toBe(1); done(err))
+
     it "gets activity for both projects and checks there are two entries", (done) ->
         db.get_file_use(project_ids:[project_id, project_id1], max_age_s : 1000, cb:(err, x)->  expect(x.length).toBe(2); done(err))
+
+    it "gets all info about a project", (done) ->
+        db.get_project
+            project_id : project_id
+            cb         : (err, info) ->
+                expect(info?.title).toEqual('Test project')
+                expect(info?.project_id).toEqual(project_id)
+                done(err)
 
     account_id1 = undefined
     path2 = "a_third_file"

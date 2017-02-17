@@ -92,7 +92,7 @@ class exports.HistoryEditor extends FileEditor
 
     remove: () =>
         @syncstring?.close()
-        @view_doc?.remove()
+        @view_doc?.remove?()  # might not have a remove method!
 
     disconnect_from_session: =>
         @close()
@@ -355,6 +355,10 @@ class exports.HistoryEditor extends FileEditor
         @element.find(".salvus-editor-history-revision-number").text(", revision #{num+1} (of #{@length})")
         account_id = @syncstring.account_id(time)
         time_sent  = @syncstring.time_sent(time)
+
+        if time_sent? and Math.abs(time_sent - time) < 60000  # not actually offline -- just a snapshot update..
+            time_sent = undefined
+
         if account_id == @project_id
             name = "Project: " + redux.getStore('projects')?.get_title(account_id)
         else

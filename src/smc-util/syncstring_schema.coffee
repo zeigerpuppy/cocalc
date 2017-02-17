@@ -1,7 +1,26 @@
+###############################################################################
+#
+# SageMathCloud: A collaborative web-based interface to Sage, IPython, LaTeX and the Terminal.
+#
+#    Copyright (C) 2016, Sagemath Inc.
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+###############################################################################
+
 ###
 Schema for synchronized editing of strings.
-
-(c) William Stein, 2016
 ###
 
 misc = require('./misc')
@@ -53,21 +72,15 @@ schema.syncstrings =
             type : 'uuid'
             desc : "if set, then syncstring patches array have been archived in the blob with given uuid."
 
-    indexes:
-        project_last_active : ["[that.r.row('project_id'),that.r.row('last_active')]"]
-
     pg_indexes : ['last_active']
 
     user_query:
         get :
-            all:
-                cmd   : 'getAll'
-                args  : (obj, db) -> [obj.string_id]
             fields :
                 string_id         : (obj, db) -> db.sha1(obj.project_id, obj.path)
                 users             : null
                 last_snapshot     : null
-                snapshot_interval : 150      # unclear how good of a choice 150 is...
+                snapshot_interval : 150
                 project_id        : null
                 path              : null
                 deleted           : null
@@ -152,9 +165,6 @@ schema.recent_syncstrings_in_project =
                 select :
                     project_id  : 'UUID'
                     last_active : 'TIMESTAMP'
-            all :
-                cmd  : 'between'
-                args : (obj, db) -> [[obj.project_id, misc.minutes_ago(obj.max_age_m)], [obj.project_id, db.r.maxval], index:'project_last_active']
             fields :
                 project_id  : null
                 max_age_m   : 'null'
@@ -184,7 +194,6 @@ schema.patches =
         user_id  :
             type : 'integer'
             desc : "a nonnegative integer; this is the index into the syncstrings.users array of account_id's"
-            pg_check : 'NOT NULL CHECK (user_id >= 0)'
         patch    :
             type : 'string'
             pg_type : 'TEXT'  # that's what it is in the database now...
@@ -258,10 +267,6 @@ schema.patches_delete  =
                 if obj.id[1]?
                     where.push("time >= $::TIMESTAMP" : obj.id[1])
                 return where
-            all :
-                cmd     : 'between'
-                args    : (obj, db) -> [[obj.id[0], obj.id[1] ? db.r.minval], [obj.id[0], db.r.maxval]]
-                options : [{delete:true}]   # always delete
             admin  : true
             delete : true
             fields :
@@ -324,6 +329,7 @@ schema.eval_inputs =
     primary_key: ['string_id', 'time', 'user_id']
     durability : 'soft' # loss of eval requests not serious
     unique_writes: true
+    pg_indexes : ['time']
     fields:
         string_id :
             pg_type : 'CHAR(40)'
@@ -366,6 +372,7 @@ schema.eval_inputs.project_query = schema.eval_inputs.user_query
 schema.eval_outputs =
     primary_key: ['string_id', 'time', 'number']
     durability : 'soft' # loss of eval output not serious (in long term only used for analytics)
+    pg_indexes : ['time']
     fields:
         string_id :
             pg_type : 'CHAR(40)'

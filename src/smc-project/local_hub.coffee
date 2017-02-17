@@ -112,7 +112,10 @@ init_info_json = (cb) ->
         host = 'localhost'
     else
         # what we want for the Google Compute engine deployment
-        host = require('os').networkInterfaces().eth0?[0].address
+        # earlier, there was eth0, but newer Ubuntu's on GCP have ens4
+        nics = require('os').networkInterfaces()
+        mynic = nics.eth0 ? nics.ens4
+        host = mynic?[0].address
     base_url = process.env.SMC_BASE_URL ? ''
     port     = 22
     INFO =
@@ -226,6 +229,8 @@ start_tcp_server = (secret_token, port, cb) ->
     winston.info("starting tcp server: project <--> hub...")
     server = net.createServer (socket) ->
         winston.debug("received new connection")
+        socket.on 'error', (err) ->
+            winston.debug("socket error - #{err}")
 
         misc_node.unlock_socket socket, secret_token, (err) ->
             if err
@@ -276,7 +281,7 @@ start_server = (tcp_port, raw_port, cb) ->
             raw_server.start_raw_server
                 project_id : INFO.project_id
                 base_url   : INFO.base_url
-                host       : process.env.SMC_PROXY_HOST ? INFO.location.host
+                host       : process.env.SMC_PROXY_HOST ? INFO.location.host ? 'localhost'
                 data_path  : DATA
                 home       : process.env.HOME
                 port       : raw_port
