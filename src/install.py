@@ -55,7 +55,7 @@ def install_webapp(*args):
 
     if 'build' in action:
         cmd("cd wizard && make")
-        for path in ['.', 'smc-util', 'smc-util-node', 'smc-webapp']:
+        for path in ['.', 'smc-util', 'smc-util-node', 'smc-webapp', 'smc-webapp/jupyter']:
             cmd("cd %s; npm install"%path)
         # updating color schme must come first and before webpack.
         cmd("./scripts/update_color_scheme.coffee")
