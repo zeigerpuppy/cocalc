@@ -1,10 +1,29 @@
+##############################################################################
+#
+#    CoCalc: Collaborative Calculations in the Cloud
+#
+#    Copyright (C) 2016, Sagemath Inc.
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+###############################################################################
+
 ###
-This is the SMC Global HUB.  It runs as a daemon, sitting in the
+This is the CoCalc Global HUB.  It runs as a daemon, sitting in the
 middle of the action, connected to potentially thousands of clients,
 many Sage sessions, and PostgreSQL database.  There are
 many HUBs running.
-
-AGPLv3
 ###
 
 require('coffee-cache')
@@ -52,7 +71,7 @@ mime           = require('mime')
 
 program = undefined  # defined below -- can't import with nodev6 at module level when hub.coffee used as a module.
 
-# smc path configurations (shared with webpack)
+# CoCalc path configurations (shared with webpack)
 misc_node      = require('smc-util-node/misc_node')
 SMC_ROOT       = misc_node.SMC_ROOT
 SALVUS_HOME    = misc_node.SALVUS_HOME
@@ -62,10 +81,10 @@ WEBAPP_LIB     = misc_node.WEBAPP_LIB
 
 underscore = require('underscore')
 
-# SMC libraries
+# CoCalc libraries
 misc    = require('smc-util/misc')
 {defaults, required} = misc
-message = require('smc-util/message')     # salvus message protocol
+message = require('smc-util/message')     # message protocol between front-end and back-end
 client_lib = require('smc-util/client')
 
 sage    = require('./sage')               # sage server
@@ -1222,7 +1241,8 @@ class Client extends EventEmitter
                             # send an email to the user -- async, not blocking user.
                             # TODO: this can take a while -- we need to take some action
                             # if it fails, e.g., change a setting in the projects table!
-                            subject  = "SageMathCloud Invitation"
+                            theme = require('smc-util/theme')
+                            subject  = "#{theme.SITE_NAME} Invitation"
                             # override subject if explicitly given
                             if mesg.subject?
                                 subject  = mesg.subject
@@ -1232,20 +1252,19 @@ class Client extends EventEmitter
                                 base_url = "#{base_url[0]}//#{base_url[2]}"
                                 direct_link = "Then go to <a href='#{mesg.link2proj}'>the project '#{mesg.title}'</a>."
                             else # fallback for outdated clients
-                                base_url = 'https://cloud.sagemath.com/'
+                                base_url = theme.DOMAIN_NAME
                                 direct_link = ''
 
-                            # asm_group: 699 is for invites https://app.sendgrid.com/suppressions/advanced_suppression_manager
                             opts =
                                 to           : email_address
                                 bcc          : 'invites@sagemath.com'
-                                fromname     : 'SageMathCloud'
+                                fromname     : theme.SITE_NAME
                                 from         : 'invites@sagemath.com'
-                                replyto      : mesg.replyto ? 'help@sagemath.com'
+                                replyto      : mesg.replyto ? theme.DEFAULT_HELP_EMAIL
                                 replyto_name : mesg.replyto_name
                                 subject      : subject
                                 category     : "invite"
-                                asm_group    : 699
+                                asm_group    : theme.SENDGRID_ASM_INVITES
                                 body         : email + """<br/><br/>
                                                <b>To accept the invitation, please sign up at
                                                <a href='#{base_url}'>#{base_url}</a>
@@ -2931,7 +2950,7 @@ change_email_address = (mesg, client_ip_address, push_to_client) ->
 # Send an email message to the given email address with a code that
 # can be used to reset the password for a certain account.
 #
-# Anti-use-salvus-to-spam/DOS throttling policies:
+# Anti-spam/DOS throttling policies:
 #   * a given email address can be sent at most 30 password resets per hour
 #   * a given ip address can send at most 100 password reset request per minute
 #   * a given ip can send at most 250 per hour
@@ -3014,31 +3033,32 @@ forgot_password = (mesg, client_ip_address, push_to_client) ->
                     id = _id; cb(err)
         (cb) ->
             # send an email to mesg.email_address that has a password reset link
+            {DOMAIN_NAME, HELP_EMAIL, SITE_NAME} = require('smc-util/theme')
             body = """
                 <div>Hello,</div>
                 <div>&nbsp;</div>
                 <div>
-                Somebody just requested to change the password of your SageMathCloud account.
+                Somebody just requested to change the password of your #{SITE_NAME} account.
                 If you requested this password change, please click this link:</div>
                 <div>&nbsp;</div>
                 <div style="text-align: center;">
                 <span style="font-size:12px;"><b>
-                  <a href="https://cloud.sagemath.com#forgot-#{id}">https://cloud.sagemath.com#forgot-#{id}</a>
+                  <a href="#{DOMAIN_NAME}#forgot-#{id}">#{DOMAIN_NAME}#forgot-#{id}</a>
                 </b></span>
                 </div>
                 <div>&nbsp;</div>
                 <div>If you don't want to change your password, ignore this message.</div>
                 <div>&nbsp;</div>
                 <div>In case of problems, email
-                <a href="mailto:help@sagemath.com">help@sagemath.com</a> immediately
+                <a href="mailto:#{HELP_EMAIL}">#{HELP_EMAIL}</a> immediately
                 (or just reply to this email).
                 <div>&nbsp;</div>
                 """
 
             send_email
-                subject : 'SageMathCloud Password Reset'
+                subject : "#{SITE_NAME} Password Reset"
                 body    : body
-                from    : 'SageMath Help <help@sagemath.com>'
+                from    : "SageMath Help <#{HELP_EMAIL}>"
                 to      : mesg.email_address
                 category: "password_reset"
                 cb      : cb
@@ -3109,7 +3129,7 @@ connect_to_database = (opts) ->
         error : undefined   # ignored
         pool  : program.db_pool
         cb    : required
-    dbg = (m) -> winston.debug("connect_to_database (postgreSQL): #{m}")
+    dbg = (m) -> winston.debug("connect_to_database (PostgreSQL): #{m}")
     if database? # already did this
         dbg("already done")
         opts.cb(); return

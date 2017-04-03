@@ -1,4 +1,4 @@
-# SageMathCloud, by SageMath, Inc., (c) 2016 -- License: GPLv3
+# CoCalc, by SageMath, Inc., (c) 2016, 2017 -- License: AGPLv3
 
 ###
 # Webpack configuration file
@@ -93,12 +93,14 @@ async         = require('async')
 program       = require('commander')
 
 SMC_VERSION   = require('smc-util/smc-version').version
+theme         = require('smc-util/theme')
 
 git_head      = child_process.execSync("git rev-parse HEAD")
 GIT_REV       = git_head.toString().trim()
-TITLE         = 'SageMathCloud'
-SMC_REPO      = 'https://github.com/sagemathinc/smc'
-SMC_LICENSE   = 'GPLv3'
+TITLE         = theme.SITE_NAME
+DESCRIPTION   = theme.APP_TAGLINE
+SMC_REPO      = 'https://github.com/sagemathinc/cocalc'
+SMC_LICENSE   = 'AGPLv3'
 WEBAPP_LIB    = misc_node.WEBAPP_LIB
 INPUT         = path.resolve(__dirname, WEBAPP_LIB)
 OUTPUT        = misc_node.OUTPUT_DIR
@@ -215,7 +217,9 @@ while base_url_html and base_url_html[base_url_html.length-1] == '/'
 pug2html = new HtmlWebpackPlugin
                         date             : BUILD_DATE
                         title            : TITLE
+                        description      : DESCRIPTION
                         BASE_URL         : base_url_html
+                        theme            : theme
                         git_rev          : GIT_REV
                         mathjax          : MATHJAX_URL
                         filename         : 'index.html'
@@ -232,26 +236,28 @@ policyPages = []
 for pp in (x for x in glob.sync('webapp-lib/policies/*.html') when path.basename(x)[0] != '_')
     policyPages.push new HtmlWebpackPlugin
                         filename : "policies/#{path.basename(pp)}"
+                        theme    : theme
                         inject   : 'head'
                         favicon  : path.join(INPUT, 'favicon.ico')
                         template : pp
                         chunks   : ['css']
                         minify   : htmlMinifyOpts
 
-# video chat: not possible to render to html, while at the same time also supporting query parameters for files in the url
-# maybe at some point https://github.com/webpack/webpack/issues/536 has an answer
-videoChatSide = new HtmlWebpackPlugin
-                        filename : "webrtc/group_chat_side.html"
-                        inject   : 'head'
-                        template : 'webapp-lib/webrtc/group_chat_side.html'
-                        chunks   : ['css']
-                        minify   : htmlMinifyOpts
-videoChatCell = new HtmlWebpackPlugin
-                        filename : "webrtc/group_chat_cell.html"
-                        inject   : 'head'
-                        template : 'webapp-lib/webrtc/group_chat_cell.html'
-                        chunks   : ['css']
-                        minify   : htmlMinifyOpts
+#video chat is done differently, this is kept for reference.
+## video chat: not possible to render to html, while at the same time also supporting query parameters for files in the url
+## maybe at some point https://github.com/webpack/webpack/issues/536 has an answer
+#videoChatSide = new HtmlWebpackPlugin
+#                        filename : "webrtc/group_chat_side.html"
+#                        inject   : 'head'
+#                        template : 'webapp-lib/webrtc/group_chat_side.html'
+#                        chunks   : ['css']
+#                        minify   : htmlMinifyOpts
+#videoChatCell = new HtmlWebpackPlugin
+#                        filename : "webrtc/group_chat_cell.html"
+#                        inject   : 'head'
+#                        template : 'webapp-lib/webrtc/group_chat_cell.html'
+#                        chunks   : ['css']
+#                        minify   : htmlMinifyOpts
 
 # global css loader configuration
 cssConfig = JSON.stringify(minimize: true, discardComments: {removeAll: true}, mergeLonghand: true, sourceMap: true)
@@ -363,7 +369,8 @@ plugins = [
 
 if not QUICK_BUILD or PRODMODE
     plugins = plugins.concat(policyPages)
-    plugins = plugins.concat([videoChatSide, videoChatCell, assetsPlugin, statsWriterPlugin])
+    plugins = plugins.concat([assetsPlugin, statsWriterPlugin])
+    # video chat plugins would be added here
 
 if PRODMODE
     console.log "production mode: enabling compression"
@@ -382,7 +389,7 @@ if PRODMODE or MINIFY
                                 sourceMap: false
                                 minimize: true
                                 output:
-                                    comments: new RegExp(TITLE,"g") # to keep the banner inserted above
+                                    comments: new RegExp("This file is part of #{TITLE}","g") # to keep the banner inserted above
                                 mangle:
                                     except       : ['$super', '$', 'exports', 'require']
                                     screw_ie8    : true
@@ -457,6 +464,7 @@ module.exports =
             { test: /\.hbs$/,    loader: "handlebars-loader" },
             { test: /\.woff(2)?(\?v=[0-9].[0-9].[0-9])?$/, loader: "url-loader?#{woffconfig}" },
             { test: /\.(ttf|eot)(\?v=[0-9].[0-9].[0-9])?$/, loader: "file-loader?name=#{hashname}" },
+            { test: /\.(ttf|eot)$/, loader: "file-loader?name=#{hashname}" },
             # { test: /\.css$/,    loader: 'style!css' },
             { test: /\.css$/, loaders: ["style-loader", "css-loader?#{cssConfig}"]}, # loader: extractTextCss }, #
             { test: /\.pug$/, loader: 'pug-loader' },

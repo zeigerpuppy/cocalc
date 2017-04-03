@@ -8,7 +8,7 @@ Register this editor with SMC
 misc                   = require('smc-util/misc')
 
 {register_file_editor} = require('../project_file')
-{salvus_client}        = require('../salvus_client')
+{webapp_client}        = require('../webapp_client')
 {alert_message}        = require('../alerts')
 {redux_name}           = require('../smc-react')
 
@@ -34,7 +34,7 @@ register_file_editor
         store   = redux.createStore(name, JupyterStore)
 
         base = misc.separate_file_extension(path).name
-        syncdb = salvus_client.sync_db
+        syncdb = webapp_client.sync_db
             project_id      : project_id
             path            : misc.meta_file(base, 'ipython')  # TODO
             change_throttle : 5    # our UI/React can handle more rapid updates; plus we want output FAST.
@@ -44,7 +44,7 @@ register_file_editor
             string_cols     : ['input']
             cursors         : true
 
-        actions._init(project_id, path, syncdb, store, salvus_client)
+        actions._init(project_id, path, syncdb, store, webapp_client)
 
         window.a = actions # for DEBUGGING
 

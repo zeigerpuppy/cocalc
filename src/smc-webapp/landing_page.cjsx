@@ -1,8 +1,8 @@
 ##############################################################################
 #
-# SageMathCloud: A collaborative web-based interface to Sage, IPython, LaTeX and the Terminal.
+#    CoCalc: Collaborative Calculations in the Cloud
 #
-#    Copyright (C) 2015 -- 2016, SageMath, Inc.
+#    Copyright (C) 2015 -- 2017, SageMath, Inc.
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -18,19 +18,20 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ###############################################################################
+
 ###
 The Landing Page
 ###
 {rclass, React, ReactDOM, redux, rtypes} = require('./smc-react')
 {Alert, Button, ButtonToolbar, Col, Modal, Grid, Row, FormControl, FormGroup, Well, ClearFix} = require('react-bootstrap')
-{ErrorDisplay, Icon, Loading, ImmutablePureRenderMixin, Footer, UNIT, SAGE_LOGO_COLOR, BS_BLUE_BGRND} = require('./r_misc')
+{ErrorDisplay, Icon, Loading, ImmutablePureRenderMixin, Footer, UNIT, COLORS} = require('./r_misc')
 {HelpEmailLink, SiteName, SiteDescription, TermsOfService, AccountCreationEmailInstructions} = require('./customize')
-{HelpPageUsageSection} = require('./r_help')
-#DESC_FONT = "'Roboto Mono','monospace'"
+{HelpPageUsageSection, ThirdPartySoftware} = require('./r_help')
 DESC_FONT = 'sans-serif'
 
 misc = require('smc-util/misc')
-SMC_ICON_URL = require('salvus-icon.svg')
+{APP_TAGLINE} = require('smc-util/theme')
+{APP_ICON_WHITE, APP_LOGO_NAME_WHITE} = require('./misc_page')
 
 images = [
     require('sagepreview/01-worksheet.png'),
@@ -38,15 +39,14 @@ images = [
     require('sagepreview/03-latex.png'),
     require('sagepreview/05-sky_is_the_limit.png'),
 ]
-# 'static/sagepreview/04-files.png'
 
-$.get window.smc_base_url + "/registration", (obj, status) ->
+$.get window.app_base_url + "/registration", (obj, status) ->
     if status == 'success'
         redux.getActions('account').setState(token : obj.token)
 
 reset_password_key = () ->
     url_args = window.location.href.split("#")
-    # toLowerCase is important since some mail transport agents will uppercase the URL -- see https://github.com/sagemathinc/smc/issues/294
+    # toLowerCase is important since some mail transport agents will uppercase the URL -- see https://github.com/sagemathinc/cocalc/issues/294
     if url_args.length == 2 and url_args[1].slice(0, 6).toLowerCase() == 'forgot'
         return url_args[1].slice(7, 7+36).toLowerCase()
     return undefined
@@ -74,7 +74,7 @@ Passports = rclass
     render_strategy: (name) ->
         if name is 'email'
             return
-        url = "#{window.smc_base_url}/auth/#{name}"
+        url = "#{window.app_base_url}/auth/#{name}"
         <a href={url} key={name}>
             <Icon size='2x' name='stack' href={url}>
                 {<Icon name='circle' stack='2x' style={color: @styles[name].backgroundColor} /> if name isnt 'github'}
@@ -137,7 +137,11 @@ SignUp = rclass
             </FormGroup>
 
     render: ->
-        <Well style={marginTop:'10px'}>
+        well_style =
+            marginTop      : '10px'
+            borderWidth    : 5
+            'border-color' : COLORS.LANDING.LOGIN_BAR_BG
+        <Well style=well_style>
             {@display_token_input()}
             {@display_error("token")}
             {@display_error("account_creation_failed")}   {# a generic error}
@@ -470,20 +474,21 @@ SMC_Commercial = ->
     </iframe>
 
 SMC_Quote = ->
+    {DOMAIN_NAME} = require('smc-util/theme')
     <div style={marginTop:'15px'}>
-        <a href="https://www.youtube.com/watch?v=ZcxUNemJfZw" target="_blank"  style={'width':'104px','height':'104px','float':'right'} title="Will Conley heads UCLA's massive use of SageMathCloud in the Mathematics for Life Scientists">
+        <a href="https://www.youtube.com/watch?v=ZcxUNemJfZw" target="_blank"  style={'width':'104px','height':'104px','float':'right'} title="Will Conley heads UCLA's massive use of CoCalc in the Mathematics for Life Scientists">
             <img className='img-rounded' src={require('will_conley.jpg')} style={'height':'102px'} />
         </a>
-        <p className='lighten'>"SageMathCloud provides a user-friendly interface. Students don’t need to install any software at all.
-        They just open up a web browser and go to cloud.sagemath.com and that’s it. They just type code directly
+        <p className='lighten'>"CoCalc provides a user-friendly interface. Students don’t need to install any software at all.
+        They just open up a web browser and go to {DOMAIN_NAME} and that’s it. They just type code directly
         in, hit shift+enter and it runs, and they can see if it works. It provides immediate feedback.
-        The <a href='https://github.com/mikecroucher/SMC_tutorial/blob/master/README.md' target='_blank'>course
+        The <a href='https://mikecroucher.github.io/SMC_tutorial/' target='_blank'>course
         management features</a> work really well." - Will Conley, Math professor, University of California at Los Angeles
         </p>
         <p style={marginBottom:0} >
-            <a href="https://github.com/sagemathinc/smc/wiki/Quotes" target="_blank">What users are saying</a> {' | '}
-            <a href="https://github.com/sagemathinc/smc/wiki/Teaching" target="_blank">Courses using SageMathCloud</a> {' | '}
-            <a href="https://github.com/sagemathinc/smc/wiki/SMC-for-Students-and-Teachers" target="_blank">Unique Advantages</a>
+            <a href="https://github.com/sagemathinc/cocalc/wiki/Quotes" target="_blank">What users are saying</a> {' | '}
+            <a href="https://github.com/sagemathinc/cocalc/wiki/Teaching" target="_blank">Courses using CoCalc</a> {' | '}
+            <a href="https://github.com/sagemathinc/cocalc/wiki/SMC-for-Students-and-Teachers" target="_blank">Unique Advantages</a>
         </p>
     </div>
 
@@ -516,7 +521,7 @@ SagePreview = rclass
                             <SiteName /> helps to you to <strong>conveniently organize a course</strong>: add students, create their projects, see their progress,
                             understand their problems by dropping right into their files from wherever you are.
                             Conveniently handout assignments, collect them, grade them, and finally return them.
-                            (<a href="https://github.com/sagemathinc/smc/wiki/Teaching" target="_blank">SMC used for Teaching</a> and <a href="http://www.beezers.org/blog/bb/2015/09/grading-in-sagemathcloud/" target="_blank">learn more about courses</a>).
+                            (<a href="https://github.com/sagemathinc/cocalc/wiki/Teaching" target="_blank"><SiteName /> used for Teaching</a> and <a href="https://mikecroucher.github.io/SMC_tutorial/" target="_blank">learn more about courses</a>).
                         </ExampleBox>
                     </Col>
                 </Row>
@@ -527,7 +532,7 @@ SagePreview = rclass
                             <SiteName /> supports authoring documents written in LaTeX, Markdown or HTML.
                             The <strong>preview</strong> helps you understanding what&#39;s going on.
                             The LaTeX editor also supports <strong>forward and inverse search</strong> to avoid getting lost in large documents.
-                            SageMathCloud also allows you to publish documents online.
+                            CoCalc also allows you to publish documents online.
                         </ExampleBox>
                     </Col>
                     <Col sm=6>
@@ -570,7 +575,7 @@ ExampleBox = rclass
 
 Connecting = () ->
     <div style={fontSize : "35px", marginTop: "125px", textAlign: "center", color: "#888"}>
-        <Icon name="spinner" spin /> Connecting...
+        <Icon name="cc-icon-cocalc-ring" spin /> Connecting...
     </div>
 
 
@@ -603,7 +608,7 @@ exports.LandingPage = rclass
                         forgot_password_success={@props.forgot_password_success}
                     /> if @props.show_forgot_password}
                 <Row style={fontSize: UNIT,\
-                            backgroundColor: SAGE_LOGO_COLOR,\
+                            backgroundColor: COLORS.LANDING.LOGIN_BAR_BG,\
                             padding: 5, margin: 0, borderRadius:4}
                      className="visible-xs">
                         <SignIn
@@ -613,18 +618,19 @@ exports.LandingPage = rclass
                             xs            = {true} />
                         <div style={clear:'both'}></div>
                 </Row>
-                <Row style={fontSize        : 3*UNIT,\
-                            backgroundColor : SAGE_LOGO_COLOR,\
+                <Row style={backgroundColor : COLORS.LANDING.LOGIN_BAR_BG,\
                             padding         : 5,\
                             margin          : 0,\
-                            borderRadius    : 4,\
+                            marginBottom    : 20,\
+                            borderRadius    : 5,\
+                            position        : 'relative',\
                             whiteSpace      : 'nowrap'}
                      className="hidden-xs">
                       <div style={width    : 490,\
                                   zIndex   : 10,\
                                   position : "relative",\
-                                  top      : 12,\
-                                  right    : 12,\
+                                  top      : UNIT,\
+                                  right    : UNIT,\
                                   fontSize : '11pt',\
                                   float    : "right"}
                           >
@@ -634,36 +640,39 @@ exports.LandingPage = rclass
                               has_account   = {@props.has_account}
                               xs            = {false} />
                       </div>
-                      <span style={display         : 'inline-block', \
-                                   backgroundImage : "url('#{SMC_ICON_URL}')", \
-                                   backgroundSize  : 'contain', \
-                                   height          : UNIT * 4, width: UNIT * 4, \
-                                   borderRadius    : 10, \
-                                   verticalAlign   : 'center'}>
-                      </span>
+                      <div style={ display          : 'inline-block', \
+                                   backgroundImage  : "url('#{APP_ICON_WHITE}')", \
+                                   backgroundSize   : 'contain', \
+                                   height           : UNIT * 5, width: UNIT * 5, \
+                                   margin           : 5,\
+                                   verticalAlign    : 'center',\
+                                   backgroundRepeat : 'no-repeat'}>
+                      </div>
                       <div className="hidden-sm"
-                          style={display       : 'inline-block',\
-                                  fontFamily   : DESC_FONT,\
-                                  fontSize     : "28px",\
-                                  top          : -1 * UNIT,\
-                                  position     : 'relative',\
-                                  color        : 'white',\
-                                  lineHeight   : 0,\
-                                  paddingRight : UNIT}><SiteName /></div>
-                      <div style={fontWeight   : "700",\
+                          style={ display          : 'inline-block',\
+                                  fontFamily       : DESC_FONT,\
+                                  fontSize         : "28px",\
+                                  top              : UNIT,\
+                                  left             : UNIT * 7,\
+                                  width            : 250,\
+                                  height           : 55,\
+                                  position         : 'absolute',\
+                                  color            : 'white',\
+                                  backgroundImage  : "url('#{APP_LOGO_NAME_WHITE}')",\
+                                  backgroundSize   : 'contain',\
+                                  backgroundRepeat : 'no-repeat'}>
+                      </div>
+                      <div className="hidden-sm">
+                          <SiteDescription
+                              style={ fontWeight   : "700",\
                                   fontSize     : "15px",\
-                                  lineHeight   : "1.3",\
                                   fontFamily   : "sans-serif",\
-                                  top          : 1,\
+                                  bottom       : 10,\
+                                  left         : UNIT * 7,\
                                   display      : 'inline-block',\
-                                  position     : "relative",\
-                                  color        : "white",\
-                                  paddingRight : UNIT}>Collaborative<br/>Computational<br/>Mathematics</div>
-                </Row>
-                <Row>
-                    <div className="hidden-xs" style={padding: "#{UNIT}px"}>
-                        <SiteDescription style={color:'#666', fontSize:"#{UNIT}px"} />
-                    </div>
+                                  position     : "absolute",\
+                                  color        : "white"} />
+                      </div>
                 </Row>
                 <Row>
                     <Col sm=5>
@@ -678,7 +687,7 @@ exports.LandingPage = rclass
                         <Well style={'float':'right', marginBottom:'15px'} className="lighten">
                             <h3 style={marginTop: 0}>For professors teaching courses using open source software</h3>
                             <p style={marginBottom:'15px'}>
-                            SMC is the easiest way to get your class up and running.  We eliminate installation
+                            <SiteName /> is the easiest way to get your class up and running.  We eliminate installation
                             problems, and the limitations of the Mathematica and ShareLaTeX cloud offerings.
                             Our collaborative environment includes LaTeX, R, Jupyter, Python, SageMath,
                             Octave, Julia, and much more.</p>
@@ -688,13 +697,10 @@ exports.LandingPage = rclass
                         </Well>
                     </Col>
                 </Row>
-                <Well>
-                    <Row>
-                        <Col sm=12 className='hidden-xs'>
-                            <HelpPageUsageSection />
-                        </Col>
-                    </Row>
-                </Well>
+                <Row className='hidden-xs' style={marginBottom: 20}>
+                    <ThirdPartySoftware />
+                    <HelpPageUsageSection />
+                </Row>
                 <Row>
                     <Col sm=12 className='hidden-xs'>
                         <LandingPageContent />

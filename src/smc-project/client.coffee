@@ -534,7 +534,7 @@ class exports.Client extends EventEmitter
         dbg = @dbg("write_file(path='#{opts.path}')")
         dbg()
         now = new Date()
-        if now - (@_file_io_lock[path] ? 0) < 15000  # lock expires after 15 seconds (see https://github.com/sagemathinc/smc/issues/1147)
+        if now - (@_file_io_lock[path] ? 0) < 15000  # lock expires after 15 seconds (see https://github.com/sagemathinc/cocalc/issues/1147)
             dbg("LOCK")
             opts.cb("write_file -- file is currently being read or written")
             return
@@ -568,7 +568,7 @@ class exports.Client extends EventEmitter
         @_file_io_lock ?= {}
 
         now = new Date()
-        if now - (@_file_io_lock[path] ? 0) < 15000  # lock expires after 15 seconds (see https://github.com/sagemathinc/smc/issues/1147)
+        if now - (@_file_io_lock[path] ? 0) < 15000  # lock expires after 15 seconds (see https://github.com/sagemathinc/cocalc/issues/1147)
             dbg("LOCK")
             opts.cb("path_read -- file is currently being read or written")
             return

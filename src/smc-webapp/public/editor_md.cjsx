@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# SageMathCloud: A collaborative web-based interface to Sage, IPython, LaTeX and the Terminal.
+#    CoCalc: Collaborative Calculations in the Cloud
 #
 #    Copyright (C) 2016, SageMath, Inc.
 #
@@ -24,7 +24,7 @@
 
 {ErrorDisplay, Loading, Markdown} = require('../r_misc')
 
-{salvus_client} = require('../salvus_client')
+{webapp_client} = require('../webapp_client')
 
 redux_name = (project_id, path) -> "editor-#{project_id}-#{path}"
 
@@ -43,14 +43,14 @@ PublicMarkdown = rclass ({name}) ->
         else if not @props.content?
             <Loading />
         else
-            <div className="salvus-editor-static-html-content">
+            <div className="webapp-editor-static-html-content">
                 <Markdown project_id={@props.project_id} path={@props.path} value={@props.content} />
             </div>
 
 class MDActions extends Actions
     load_content: (project_id, path) =>
         @setState(project_id:project_id, path:path)
-        salvus_client.public_get_text_file
+        webapp_client.public_get_text_file
             project_id : project_id
             path       : path
             timeout    : 60

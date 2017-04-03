@@ -4,9 +4,10 @@
         <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="description" content="SageMathCloud">
-        <meta name="author" content="William Stein">
-        <title>SageMath, Inc. Pricing</title>
+        <meta name="description" content="<%= htmlWebpackPlugin.options.theme.SITE_NAME %>">
+        <meta name="author" content="<%= htmlWebpackPlugin.options.theme.COMPANY_NAME %>">
+        <link rel="icon" type="image/png" href="<%= require('!file!favicon-32x32.png') %>" sizes="32x32">
+        <title><%= htmlWebpackPlugin.options.theme.SITE_NAME %> Pricing</title>
         <!--
         <link href="<%= require('!file!bootstrap-3.3.0/css/bootstrap.min.css') %>" rel="stylesheet">
         -->
@@ -16,14 +17,21 @@
         -->
     </head>
     <body>
-        <a target="_blank" class="pull-right" style="text-align:center" href="https://cloud.sagemath.com"><img  src="<%= require('!file!webapp-lib/favicon-96.png') %>" class="img-rounded"><br>
-            SageMathCloud</a>
+        <a target="_blank" class="pull-right" style="text-align:center"
+           href="<%= htmlWebpackPlugin.options.theme.DOMAIN_NAME %>">
+            <img  src="<%= require('!file!webapp-lib/cocalc-icon.svg') %>" style="height: 96px; width: 96px;">
+            <br>
+            <%= htmlWebpackPlugin.options.theme.SITE_NAME %>
+        </a>
         <div class="jumbotron">
             <div class="container">
                 <h1>
-                    <a href="http://www.sagemath.com" target="_blank">SageMath, Inc.</a></h1>
+                    <a href="http://www.sagemath.com" target="_blank">
+                        <%= htmlWebpackPlugin.options.theme.COMPANY_NAME %>
+                    </a>
+                </h1>
                 <h2>
-                    SageMath, Inc. Subscriptions and Pricing (September 2016)
+                    <%= htmlWebpackPlugin.options.theme.COMPANY_NAME %> Subscriptions and Pricing (September 2016)
                 </h2>
                 <a class="btn btn-default" href="index.html" role="button">&laquo; Other Policies</a>
             </div>

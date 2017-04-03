@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# SageMathCloud: A collaborative web-based interface to Sage, IPython, LaTeX and the Terminal.
+#    CoCalc: Collaborative Calculations in the Cloud
 #
 #    Copyright (C) 2014 -- 2016, SageMath, Inc.
 #
@@ -21,13 +21,13 @@
 
 
 ############################################
-# connection to Salvus hub
+# connection to back-end hub
 ############################################
 
 if window?
     # running in a web browser
-    if not window.smc_base_url?
-        window.smc_base_url = ""
+    if not window.app_base_url?
+        window.app_base_url = ""
 
     if window.location.hash.length > 1
         window.smc_target = decodeURIComponent(window.location.hash.slice(1))
@@ -37,3 +37,5 @@ if window?
 else
     exports.salvus_client = new (require('smc-util/client-test').Client)()
 
+client_browser = require('client_browser')
+exports.webapp_client = client_browser.connect()
